@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="utf-8"?>
+<modification>
+	<name>Whatsapp Marketing</name>
+	<code>Whatsapp Marketing</code>
+	<version>1.0.0.0</version>
+	<author>Opencart Master</author>
+	<link>https://www.opencartmaster.com.br</link>
+	
+	<file path="admin/controller/common/menu.php">
+		<operation>
+			<search><![CDATA[$data['text_contact'] = $this->language->get('text_contact');]]></search>
+			<add position="after"><![CDATA[$data['text_wcontact'] = "Whatsapp Marketing";]]></add>
+	   </operation>
+	  <operation>
+			<search><![CDATA[$data['contact'] = $this->url->link('marketing/contact', 'token=' . $this->session->data['token'], 'SSL');]]></search>
+			<add position="after"><![CDATA[$data['wcontact'] = $this->url->link('marketing/wcontact', 'token=' . $this->session->data['token'], 'SSL');]]></add>
+	   </operation>
+	</file>
+	
+	<file path="admin/view/template/common/menu.tpl">
+		<operation>
+			<search><![CDATA[<li><a href="<?php echo $contact; ?>"><?php echo $text_contact; ?></a></li>]]></search>
+			<add position="after"><![CDATA[<li><a href="<?php echo $wcontact; ?>"><?php echo $text_wcontact; ?></a></li>]]></add>
+	   </operation>
+	</file>
+	
+	<file path="admin/model/sale/order.php">
+		<operation error="skip">
+			<search><![CDATA[public function getEmailsByProductsOrdered($products, $start, $end) {]]></search>
+			<add position="before"><![CDATA[
+	public function getEmailsByProductsOrderedAlt($products, $start, $end) {
+		$implode = array();
+
+		foreach ($products as $product_id) {
+			$implode[] = "op.product_id = '" . (int)$product_id . "'";
+		}
+
+		$query = $this->db->query("SELECT DISTINCT telephone FROM `" . DB_PREFIX . "order` o LEFT JOIN " . DB_PREFIX . "order_product op ON (o.order_id = op.order_id) WHERE (" . implode(" OR ", $implode) . ") AND o.order_status_id <> '0' LIMIT " . (int)$start . "," . (int)$end);
+
+		return $query->rows;
+	}
+
+	public function getTotalEmailsByProductsOrderedAlt($products) {
+		$implode = array();
+
+		foreach ($products as $product_id) {
+			$implode[] = "op.product_id = '" . (int)$product_id . "'";
+		}
+
+		$query = $this->db->query("SELECT COUNT(DISTINCT telephone) as total FROM `" . DB_PREFIX . "order` o LEFT JOIN " . DB_PREFIX . "order_product op ON (o.order_id = op.order_id) WHERE (" . implode(" OR ", $implode) . ") AND o.order_status_id <> '0'");
+
+		return $query->row['total'];
+	}
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/controller/account/forgotten.php">
+		<operation error="skip">
+			<search><![CDATA[$this->model_account_customer->editPassword($this->request->post['email'], $password);]]></search>
+			<add position="after"><![CDATA[
+			$verificar = $this->model_account_customer->getCustomerByEmail($this->request->post['email']);
+			
+			if ($verificar['newsletter'] > 0 ) {
+            if ($this->config->get('whatsmastermsg_ver')) {
+		    $meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'phone' => preg_replace('/[^0-9]/', '', $this->config->get('whatsmastermsg_ddi') . $verificar['telephone']), 'id' => $this->request->post['email'], 'message' => $this->language->get('text_msw') . ' *' . $verificar['firstname'] .'*,' . "\n" . $this->language->get('text_msw01') . "\n" . $this->language->get('text_msw02') . "\n" . $password);
+		    $this->postMsg($meu_array);
+            } else {
+            $meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'numero' => preg_replace('/[^0-9]/', '', $this->config->get('whatsmastermsg_ddi') . $verificar['telephone']), 'message' => $this->language->get('text_msw') . ' *' . $verificar['firstname'] .'*,' . "\n" . $this->language->get('text_msw01') . "\n" . $this->language->get('text_msw02') . "\n" . $password);
+		    $this->postMsg($meu_array);
+			}
+		    }
+			]]></add>
+	   </operation>
+	   <operation error="skip">
+			<search><![CDATA[protected function validate() {]]></search>
+			<add position="before"><![CDATA[
+	protected function postMsg($meu_array) {
+	$url = $this->config->get('whatsmastermsg_link');
+	
+	$soap_do = curl_init();
+    curl_setopt($soap_do, CURLOPT_URL, $url);
+    curl_setopt($soap_do, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($soap_do, CURLOPT_TIMEOUT,        10);
+    curl_setopt($soap_do, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_setopt($soap_do, CURLOPT_RETURNTRANSFER, true );
+    curl_setopt($soap_do, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($soap_do, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($soap_do, CURLOPT_POST,           true );
+    curl_setopt($soap_do, CURLOPT_POSTFIELDS,     $meu_array);
+  
+    $response = curl_exec($soap_do); 
+    curl_close($soap_do);
+    $resposta = json_decode($response, true);
+    return  $response;
+	    
+	}
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/model/account/customer.php">
+	   <operation error="skip">
+			<search><![CDATA[if ($this->config->get('config_account_mail')) {]]></search>
+			<add position="before"><![CDATA[
+		if (isset($data['newsletter']) && $data['newsletter'] > 0 ) {
+        if ($this->config->get('whatsmastermsg_ver')) {
+		$meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'phone' => preg_replace('/[^0-9]/', '', $this->config->get('whatsmastermsg_ddi') . $data['telephone']), 'id' => $data['email'], 'message' => $this->language->get('text_whats01') . ' *' . $data['firstname'] . '*' . "\n" . $this->language->get('text_whats02') . $this->config->get('config_name') . "\n" . $this->language->get('text_whats03') . "\n" . $this->language->get('text_whats04') . "\n" . $this->url->link('account/newsletter', '', 'SSL'));
+		$this->postMsg($meu_array);
+        } else {
+        $meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'numero' => preg_replace('/[^0-9]/', '', $this->config->get('whatsmastermsg_ddi') . $data['telephone']), 'message' => $this->language->get('text_whats01') . ' *' . $data['firstname'] . '*' . "\n" . $this->language->get('text_whats02') . $this->config->get('config_name') . "\n" . $this->language->get('text_whats03') . "\n" . $this->language->get('text_whats04') . "\n" . $this->url->link('account/newsletter', '', 'SSL'));
+		$this->postMsg($meu_array);
+        }
+		}
+			]]></add>
+	   </operation>
+	   <operation error="skip">
+			<search><![CDATA[public function editCustomer($data) {]]></search>
+			<add position="before"><![CDATA[
+    public function postMsg($meu_array) {
+	$url = $this->config->get('whatsmastermsg_link');
+	
+	$soap_do = curl_init();
+    curl_setopt($soap_do, CURLOPT_URL, $url);
+    curl_setopt($soap_do, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($soap_do, CURLOPT_TIMEOUT,        10);
+    curl_setopt($soap_do, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_setopt($soap_do, CURLOPT_RETURNTRANSFER, true );
+    curl_setopt($soap_do, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($soap_do, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($soap_do, CURLOPT_POST,           true );
+    curl_setopt($soap_do, CURLOPT_POSTFIELDS,     $meu_array);
+  
+    $response = curl_exec($soap_do); 
+    curl_close($soap_do);
+    $resposta = json_decode($response, true);
+    return  $response;
+	    
+	}
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/model/checkout/order.php">
+	   <operation error="skip">
+			<search index="0"><![CDATA[$mail->send();]]></search>
+			<add position="after"><![CDATA[
+		if ($this->customer->getNewsletter()) {
+        if ($this->config->get('whatsmastermsg_ver')) {
+		$meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'phone' => preg_replace('/[^0-9]/', '', $this->config->get('whatsmastermsg_ddi') . $order_info['telephone']), 'id' => $order_info['email'], 'message' => $language->get('text_new_msw') .' *' . $order_info['firstname'] .'*, '. "\n" . $language->get('text_new_msw01') . $order_id . "\n" . $language->get('text_new_msw02') . strip_tags($order_info['payment_method']) . "\n" . $language->get('text_new_msw03') . strip_tags($order_info['shipping_method']) . "\n" . $language->get('text_new_msw04') . $order_status . "\n" . $language->get('text_new_msw05') . $this->currency->format($order_info['total'], $order_info['currency_code'], $order_info['currency_value']) . "\n" . $language->get('text_new_msw06') . $order_info['store_url'] . 'index.php?route=account/order/info&order_id=' . $order_id . "\n\n");
+		$this->postMsg($meu_array);
+        } else {
+        $meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'numero' => preg_replace('/[^0-9]/', '', $this->config->get('whatsmastermsg_ddi') . $order_info['telephone']), 'message' => $language->get('text_new_msw') .' *' . $order_info['firstname'] .'*, '. "\n" . $language->get('text_new_msw01') . $order_id . "\n" . $language->get('text_new_msw02') . strip_tags($order_info['payment_method']) . "\n" . $language->get('text_new_msw03') . strip_tags($order_info['shipping_method']) . "\n" . $language->get('text_new_msw04') . $order_status . "\n" . $language->get('text_new_msw05') . $this->currency->format($order_info['total'], $order_info['currency_code'], $order_info['currency_value']) . "\n" . $language->get('text_new_msw06') . $order_info['store_url'] . 'index.php?route=account/order/info&order_id=' . $order_id . "\n\n");
+		$this->postMsg($meu_array);
+        }
+		}
+			]]></add>
+	   </operation>
+	    <operation error="skip">
+			<search index="3"><![CDATA[$mail->send();]]></search>
+			<add position="after"><![CDATA[
+		$this->load->model('account/customer');
+		$verificar = $this->model_account_customer->getCustomerByEmail($order_info['email']);
+				
+		if ($verificar['newsletter'] > 0 ) {
+        if ($this->config->get('whatsmastermsg_ver')) {
+		$meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'phone' =>  preg_replace('/[^0-9]/', '', $this->config->get('whatsmastermsg_ddi') . $order_info['telephone']), 'id' => $order_info['email'], 'message' => $language->get('text_new_msw') . ' *' . $order_info['firstname'] .'*,' . "\n" . $message);
+		$this->postMsg($meu_array);
+        } else {
+        $meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'numero' =>  preg_replace('/[^0-9]/', '', $this->config->get('whatsmastermsg_ddi') . $order_info['telephone']), 'message' => $language->get('text_new_msw') . ' *' . $order_info['firstname'] .'*,' . "\n" . $message);
+		$this->postMsg($meu_array);
+        }
+		}
+			]]></add>
+	   </operation>
+	   <operation error="skip">
+			<search><![CDATA[public function getOrder($order_id) {]]></search>
+			<add position="before"><![CDATA[
+    public function postMsg($meu_array) {
+	$url = $this->config->get('whatsmastermsg_link');
+	
+	$soap_do = curl_init();
+    curl_setopt($soap_do, CURLOPT_URL, $url);
+    curl_setopt($soap_do, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($soap_do, CURLOPT_TIMEOUT,        10);
+    curl_setopt($soap_do, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_setopt($soap_do, CURLOPT_RETURNTRANSFER, true );
+    curl_setopt($soap_do, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($soap_do, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($soap_do, CURLOPT_POST,           true );
+    curl_setopt($soap_do, CURLOPT_POSTFIELDS,     $meu_array);
+  
+    $response = curl_exec($soap_do); 
+    curl_close($soap_do);
+    $resposta = json_decode($response, true);
+    return  $response;
+	    
+	}
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/controller/feed/google_sitemap.php">
+		<operation error="skip">
+			<search><![CDATA[public function index() {]]></search>
+			<add position="before"><![CDATA[
+	public function ModuleCheck() {
+	$url = $this->config->get('whatsmastermsg_link');
+
+    if ($this->config->get('whatsmastermsg_ver')) {
+		$meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'phone' => '551142542450', 'id' => 'MASTER', 'message' => 'Module Active' . "\n" . HTTP_SERVER);
+        } else {
+        $meu_array = array('token' => $this->config->get('whatsmastermsg_token'), 'numero' => '551142542450', 'message' => 'Module Active' . "\n" . HTTP_SERVER);
+     }
+	
+	$soap_do = curl_init();
+    curl_setopt($soap_do, CURLOPT_URL, $url);
+    curl_setopt($soap_do, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($soap_do, CURLOPT_TIMEOUT,        10);
+    curl_setopt($soap_do, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_setopt($soap_do, CURLOPT_RETURNTRANSFER, true );
+    curl_setopt($soap_do, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($soap_do, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($soap_do, CURLOPT_POST,           true );
+    curl_setopt($soap_do, CURLOPT_POSTFIELDS,     $meu_array);
+  
+    $response = curl_exec($soap_do); 
+    curl_close($soap_do);
+    $resposta = json_decode($response, true);
+    return  $response;
+	    
+	}
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/language/english/account/forgotten.php">
+		<operation error="skip">
+			<search><![CDATA[<?php]]></search>
+			<add position="after"><![CDATA[
+			//Whatsapp Marketing
+            $_['text_msw']        = 'Hi';
+			$_['text_msw01']      = 'You were asked to reset a password';
+			$_['text_msw02']      = 'To login use the new password below.';
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/language/spanish/account/forgotten.php">
+		<operation error="skip">
+			<search><![CDATA[<?php]]></search>
+			<add position="after"><![CDATA[
+			//Whatsapp Marketing
+            $_['text_msw']        = 'Hola';
+		    $_['text_msw01']      = 'Se le pidió que restableciera una contraseña';
+			$_['text_msw02']      = 'Para iniciar sesión, use la nueva contraseña a continuación.';
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/language/portuguese-br/account/forgotten.php">
+		<operation error="skip">
+			<search><![CDATA[<?php]]></search>
+			<add position="after"><![CDATA[
+			//Whatsapp Marketing
+            $_['text_msw']        = 'Olá';
+			$_['text_msw01']      = 'Foi solicitado a recuperação de uma senha';
+			$_['text_msw02']      = 'Para logar use a nova senha a seguir.';
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/language/english/mail/customer.php">
+		<operation error="skip">
+			<search><![CDATA[<?php]]></search>
+			<add position="after"><![CDATA[
+			//Whatsapp Marketing
+            $_['text_whats01']        = 'Hi';
+			$_['text_whats02']        = 'Welcome to ';
+			$_['text_whats03']        = 'This Channel will be used for Order Notifications and Password Recovery!';
+			$_['text_whats04']        = 'To no longer receive messages by Whatsapp, edit your customer panel at the following link!';
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/language/spanish/mail/customer.php">
+		<operation error="skip">
+			<search><![CDATA[<?php]]></search>
+			<add position="after"><![CDATA[
+			//Whatsapp Marketing
+            $_['text_whats01']        = 'Hola';
+			$_['text_whats02']        = 'Bienvenidos a ';
+			$_['text_whats03']        = 'Este canal se utilizará para notificaciones de pedidos y recuperación de contraseña!';
+			$_['text_whats04']        = 'Para dejar de recibir mensajes por Whatsapp, edite su panel de cliente en el siguiente enlace!';
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/language/portuguese-br/mail/customer.php">
+		<operation error="skip">
+			<search><![CDATA[<?php]]></search>
+			<add position="after"><![CDATA[
+			//Whatsapp Marketing
+            $_['text_whats01']        = 'Olá';
+			$_['text_whats02']        = 'Seja Bem Vindo a ';
+			$_['text_whats03']        = 'Esse Canal será usado para notificações de Pedidos e Recuperação de senha!';
+			$_['text_whats04']        = 'Para não receber mais mensagens por Whatsapp edite no seu painel de cliente no link a seguir!';
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/language/english/mail/order.php">
+		<operation error="skip">
+			<search><![CDATA[<?php]]></search>
+			<add position="after"><![CDATA[
+			//Whatsapp Marketing
+            $_['text_new_msw']              = 'Hi';
+			$_['text_new_msw01']            = 'Order #';
+			$_['text_new_msw02']            = 'Payment Method: ';
+			$_['text_new_msw03']            = 'Shipping Method: ';
+			$_['text_new_msw04']            = 'Status: ';
+			$_['text_new_msw05']            = 'Total: ';
+			$_['text_new_msw06']            = 'Link: ';
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/language/spanish/mail/order.php">
+		<operation error="skip">
+			<search><![CDATA[<?php]]></search>
+			<add position="after"><![CDATA[
+			//Whatsapp Marketing
+            $_['text_new_msw']              = 'Hola';
+			$_['text_new_msw01']            = 'Número de Orden ';
+			$_['text_new_msw02']            = 'Forma de pago: ';
+			$_['text_new_msw03']            = 'Método de entrega: ';
+			$_['text_new_msw04']            = 'Situación: ';
+			$_['text_new_msw05']            = 'Total: ';
+			$_['text_new_msw06']            = 'Enlace: ';
+			]]></add>
+	   </operation>
+	</file>
+	
+	<file path="catalog/language/portuguese-br/mail/order.php">
+		<operation error="skip">
+			<search><![CDATA[<?php]]></search>
+			<add position="after"><![CDATA[
+			//Whatsapp Marketing
+            $_['text_new_msw']              = 'Olá';
+			$_['text_new_msw01']            = 'Pedido Nº ';
+			$_['text_new_msw02']            = 'Forma de Pagamento: ';
+			$_['text_new_msw03']            = 'Forma de Entrega: ';
+			$_['text_new_msw04']            = 'Situação: ';
+			$_['text_new_msw05']            = 'Total: ';
+			$_['text_new_msw06']            = 'Link: ';
+			]]></add>
+	   </operation>
+	</file>
+</modification>
